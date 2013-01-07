@@ -1,15 +1,15 @@
-
-
 package Math::Polygon::Tree;
 
-=head1 NAME
+# ABSTRACT: fast check if point is inside polygon
 
-Math::Polygon::Tree - Class for fast check if point is inside polygon
+# $Id$
 
-=head1 SYNOPSIS
+=head1 DESCRIPTION
 
 Math::Polygon::Tree creates a B-tree of polygon parts for fast check if object is inside this polygon.
 This method is effective if polygon has hundreds or more segments.
+
+=head1 SYNOPSIS
 
     use Math::Polygon::Tree;
 
@@ -20,7 +20,22 @@ This method is effective if polygon has hundreds or more segments.
 
 =cut
 
-our $VERSION = '0.041';
+use 5.010;
+use strict;
+use warnings;
+use utf8;
+use Carp;
+
+use base qw{ Exporter };
+
+use List::Util qw{ sum min max };
+use List::MoreUtils qw{ uniq };
+
+# FIXME: remove and use simple bbox clip?
+use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
+
+
+
 our @EXPORT_OK = qw{
     polygon_bbox
     polygon_centroid
@@ -29,31 +44,14 @@ our @EXPORT_OK = qw{
 
 
 
-use base qw{ Exporter };
-
-use warnings;
-use strict;
-use Carp;
-
-use List::Util qw{ sum min max };
-use List::MoreUtils qw{ uniq };
-
-# FIXME: remove and use simple bbox clip?
-use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
-
-# use Data::Dump 'dd';
-
-
-
 my $MAX_LEAF_POINTS = 16;       # minimum 6
 
 
-=head1 METHODS
+=method new
 
-=head2 new
+Takes [at least one] contour and creates a tree structure. All polygons are outer, inners in not implemented.
 
-Takes polygons (at least one) and creates a tree structure. All polygons are outer, inners in not implemented.
-Polygon is a reference to array of points
+Contour is an arrayref of points:
 
     my $poly1 = [ [0,0], [0,2], [2,2], ... ];   
     ...
@@ -185,12 +183,13 @@ sub new {
 }
 
 
-=head2 contains
+=method contains
+
+    if ( $bound->contains( [1,1] ) )  { ... }
 
 Checks if point is inside bound polygon.
-Returns 1 if point is inside polygon or 0 otherwise.
 
-    if ( $bound->contains( [1,1] ) )  { ... 
+Returns 1 if point is inside polygon or 0 otherwise.
 
 =cut
 
@@ -228,9 +227,10 @@ sub contains {
 }
 
 
-=head2 contains_points
+=method contains_points
 
 Checks if points are inside bound polygon.
+
 Returns 1 if all points are inside polygon, 0 if all outside, or B<undef>.
 
     if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ...
@@ -257,9 +257,10 @@ sub contains_points {
 }
 
 
-=head2 contains_bbox_rough
+=method contains_bbox_rough
 
 Checks if box is inside bound polygon.
+
 Returns 1 if box is inside polygon, 0 if box is outside polygon or B<undef> if it 'doubts'. 
 
     my ($xmin, $ymin, $xmax, $ymax) = ( 1, 1, 2, 2 );
@@ -303,9 +304,10 @@ sub contains_bbox_rough {
 }
 
 
-=head2 contains_polygon_rough
+=method contains_polygon_rough
 
 Checks if polygon is inside bound polygon.
+
 Returns 1 if inside, 0 if outside or B<undef> if 'doubts'. 
 
     if ( $bound->contains_polygon_rough( [ [1,1], [1,2], [2,2], ... ] ) )  { ... }
@@ -325,7 +327,7 @@ sub contains_polygon_rough {
 
 
 
-=head2 bbox
+=method bbox
 
 Returns polygon's bounding box. 
 
@@ -341,9 +343,7 @@ sub bbox {
 
 
 
-=head1 FUNCTIONS
-
-=head2 polygon_bbox
+=func polygon_bbox
 
 Function that returns polygon's bbox.
 
@@ -362,7 +362,7 @@ sub polygon_bbox (@) {
 }
 
 
-=head2 polygon_centroid
+=func polygon_centroid
 
 Function that returns polygon's weightened center.
 
@@ -398,9 +398,10 @@ sub polygon_centroid {
 }
 
 
-=head2 polygon_contains_point
+=func polygon_contains_point
 
 Function that tests if polygon contains point (modified one from Math::Polygon::Calc).
+
 Returns -1 if point lays on polygon's boundary
 
 =cut
@@ -444,58 +445,3 @@ sub polygon_contains_point ($@) {
 
 1;
 
-
-
-=head1 AUTHOR
-
-liosha, C<< <liosha at cpan.org> >>
-
-=head1 BUGS
-
-Please report any bugs or feature requests to C<bug-math-polygon-tree at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Math-Polygon-Tree>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
-
-
-=head1 SUPPORT
-
-You can find documentation for this module with the perldoc command.
-
-    perldoc Math::Polygon::Tree
-
-
-You can also look for information at:
-
-=over 4
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Math-Polygon-Tree>
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/Math-Polygon-Tree>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/Math-Polygon-Tree>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Math-Polygon-Tree/>
-
-=back
-
-
-=head1 COPYRIGHT & LICENSE
-
-Copyright 2009 liosha.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
-
-See http://dev.perl.org/licenses/ for more information.
-
-
-=cut
