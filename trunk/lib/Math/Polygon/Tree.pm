@@ -189,7 +189,7 @@ sub new {
 
 Checks if point is inside bound polygon.
 
-Returns 1 if point is inside polygon or 0 otherwise.
+Returns 1 if point is inside polygon, -1 if it lays on polygon boundary (dirty), or 0 otherwise.
 
 =cut
 
@@ -218,8 +218,7 @@ sub contains {
 
     if ( exists $self->{poly} ) {
         for my $poly ( @{$self->{poly}} ) {
-            return 1
-                if polygon_contains_point( $point, @$poly );
+            return polygon_contains_point( $point, @$poly );
         }
     }
 
