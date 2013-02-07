@@ -28,9 +28,9 @@ use Carp;
 
 use base qw{ Exporter };
 
-use List::Util qw{ reduce sum min max };
+use List::Util qw{ reduce first sum min max };
 use List::MoreUtils qw{ all uniq };
-use POSIX qw/ ceil /;
+use POSIX qw/ floor ceil /;
 
 # FIXME: remove and use simple bbox clip?
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
@@ -66,51 +66,41 @@ or a .poly file
 =cut
 
 sub new {
-    my ($class, @contours) = @_;
+    my ($class, @in_contours) = @_;
     my $self = bless {}, $class;
 
     ##  load and close polys, calc bbox
-    while ( @contours ) {
-        my $contour = shift @contours;
-        if ( !ref $contour ) {
-            unshift @contours, read_poly_file($contour);
+    my @contours;
+    while ( @in_contours ) {
+        my $contour = shift @in_contours;
+
+        if ( ref $contour ne 'ARRAY' ) {
+            unshift @in_contours, read_poly_file($contour);
             next;
         }
-
-        croak "Polygon should be a reference to array of points"  if ref $contour ne 'ARRAY';
 
         my @points = @$contour;
         push @points, $points[0]  if !( $points[0] ~~ $points[-1] );
 
-        push @{$self->{poly}}, \@points;
+        push @contours, \@points;
 
         my $bbox = polygon_bbox(\@points);
         $self->{bbox} = bbox_union($bbox, $self->{bbox});
     }
 
-    croak "No contours"  if !$self->{poly};
+    croak "No contours"  if !@contours;
 
-    my $nrpoints = sum map { scalar @$_ } @{$self->{poly}};
+    my $nrpoints = sum map { scalar @$_ } @contours;
 
-=del
-    ##  full square?
-    if ( $nrpoints == 5 ) {
-        my $poly = $self->{poly}->[0];
-        my @xs = uniq map { $_->[0] } @$poly;
-        my @ys = uniq map { $_->[1] } @$poly;
 
-        if ( @xs == 2  &&  @ys == 2 ) {
-            $self->{full} = 1;
-        }
+    # small polygon - no need to slice
+    if ( $nrpoints <= $MAX_LEAF_POINTS ) {
+        $self->{poly} = \@contours;
+        return $self;
     }
-=cut
-    @{$self}{qw/ xmin ymin xmax ymax/} = @{$self->{bbox}};
-
-    # no need to slice
-    return $self  if $nrpoints <= $MAX_LEAF_POINTS;
 
 
-    # calc number of pieces
+    # calc number of pieces (need to tune!)
     my ($xmin, $ymin, $xmax, $ymax) = @{$self->{bbox}};
     my $xy_ratio = ($xmax-$xmin) / ($ymax-$ymin);
     my $nparts = $SLICE_COEF * log( exp(1) * ($nrpoints/$MAX_LEAF_POINTS) );
@@ -120,11 +110,12 @@ sub new {
     my $x_size  = $self->{x_size}  = ($xmax-$xmin) / $x_parts;
     my $y_size  = $self->{y_size}  = ($ymax-$ymin) / $y_parts;
 
+
     # slice
     my $subparts = $self->{subparts} = [];
     
     my $gpc_poly = new_gpc();
-    $gpc_poly->add_polygon( $_, 0 )  for @{$self->{poly}};
+    $gpc_poly->add_polygon( $_, 0 )  for @contours;
     
     for my $j ( 0 .. $y_parts-1 ) {
         for my $i ( 0 .. $x_parts ) {
@@ -158,49 +149,13 @@ sub new {
         }
     }
 
-#    return $self;
-
-    # old code, to delete
-        # 0 - horisontal split, 1 - vertical
-        $self->{hv}  =  my $hv  =  ($self->{xmax}-$self->{xmin}) < ($self->{ymax}-$self->{ymin});
-        $self->{avg} =  my $avg =  $hv  ?  ($self->{ymax}+$self->{ymin})/2  :  ($self->{xmax}+$self->{xmin})/2;
-
-        my $gpc = new_gpc();
-        for my $poly ( @{$self->{poly}} ) {
-            $gpc->add_polygon( $poly, 0 );
-        }
-
-        my $part1_gpc = new_gpc();
-        $part1_gpc->add_polygon( [
-                [ $self->{xmin}, $self->{ymin} ],
-                $hv  ?  [ $self->{xmin}, $avg          ]  :  [ $self->{xmin}, $self->{ymax} ],
-                $hv  ?  [ $self->{xmax}, $avg          ]  :  [ $avg         , $self->{ymax} ],
-                $hv  ?  [ $self->{xmax}, $self->{ymin} ]  :  [ $avg         , $self->{ymin} ],
-                [ $self->{xmin}, $self->{ymin} ],
-            ], 0 );
-        $part1_gpc = $gpc->clip_to( $part1_gpc, 'INTERSECT' );
-        $self->{part1} = Math::Polygon::Tree->new( $part1_gpc->get_polygons() );
-
-        my $part2_gpc = new_gpc();
-        $part2_gpc->add_polygon( [
-                [ $self->{xmax}, $self->{ymax} ],
-                $hv  ?  [ $self->{xmax}, $avg          ]  :  [ $self->{xmax}, $self->{ymin} ],
-                $hv  ?  [ $self->{xmin}, $avg          ]  :  [ $avg         , $self->{ymin} ],
-                $hv  ?  [ $self->{xmin}, $self->{ymax} ]  :  [ $avg         , $self->{ymax} ],
-                [ $self->{xmax}, $self->{ymax} ],
-            ], 0 );
-        $part2_gpc = $gpc->clip_to( $part2_gpc, 'INTERSECT' );
-        $self->{part2} = Math::Polygon::Tree->new( $part2_gpc->get_polygons() );
-
-        delete $self->{poly};
-
     return $self;
 }
 
 
 =func read_poly_file
 
-    my @contours = read_poly_file('file.poly')
+    my @contours = read_poly_file( \*STDIN )
 
 Reads content of .poly-file
 
@@ -208,14 +163,16 @@ Reads content of .poly-file
 
 sub read_poly_file {
     my ($file) = @_;
+
+    my $need_to_open = !ref $file || ref $file eq 'SCALAR';
+    my $fh = $need_to_open
+        ? do { open my $in, '<', $file  or croak "Couldn't open $file: $@"; $in }
+        : $file;
+
     my @contours;
-
-    open my $in, '<', $file
-        or croak "Couldn't open $file: $!";
-
     my $pid;
     my @cur_points;
-    while ( my $line = readline $in ) {
+    while ( my $line = readline $fh ) {
         # new contour
         if ( $line =~ /^(-?\d+)/ ) {
             $pid = $1;
@@ -236,14 +193,13 @@ sub read_poly_file {
 
         # outer contour
         if ( $line =~ /^END/  &&  @cur_points ) {
-#            push @cur_points, $cur_points[0]  if !( $cur_points[0] ~~ $cur_points[-1] );
             push @contours, [ @cur_points ];
             @cur_points = ();
             next;
         }
     }
 
-    close $in;
+    close $fh  if $need_to_open;
     return @contours;
 }
 
@@ -254,40 +210,33 @@ sub read_poly_file {
 
 Checks if point is inside bound polygon.
 
-Returns 1 if point is inside polygon, -1 if it lays on polygon boundary (dirty), or 0 otherwise.
+Returns 1 if point is inside polygon, -1 if it lays on polygon boundary, or 0 otherwise.
 
 =cut
 
 sub contains {
-    my $self  = shift;
-    my $point = shift;
-    croak "Point should be a reference" 
-        unless ref $point;
+    my ($self, $point) = @_;
 
+    croak "Point should be a reference"  if ref $point ne 'ARRAY';
+
+    # check bbox
     my ($px, $py) = @$point;
+    my ($xmin, $ymin, $xmax, $ymax) = @{ $self->{bbox} };
+    return 0  if $px < $xmin  ||  $px > $xmax  ||  $py < $ymin  ||  $py > $ymax;
 
-    return 0
-        if      $px < $self->{xmin}  ||  $px > $self->{xmax}
-            ||  $py < $self->{ymin}  ||  $py > $self->{ymax};
-
-    return $self->{full}    if  exists $self->{full};
-
-    if ( exists $self->{hv} ) {
-        if ( $point->[$self->{hv}] < $self->{avg} ) {
-            return $self->{part1}->contains( $point );
-        }
-        else {
-            return $self->{part2}->contains( $point );
-        }
-    }
-
+    # leaf
     if ( exists $self->{poly} ) {
-        for my $poly ( @{$self->{poly}} ) {
-            return polygon_contains_point( $point, @$poly );
-        }
+        my $result = first {$_} map {polygon_contains_point($point, @$_)} @{$self->{poly}};
+        return $result // 0;
     }
 
-    return 0;
+    # branch
+    my $i = floor( ($px-$xmin) / $self->{x_size} );
+    my $j = floor( ($py-$ymin) / $self->{y_size} );
+
+    my $subpart = $self->{subparts}->[$i]->[$j];
+    return $subpart  if !ref $subpart;
+    return $subpart->contains($point);
 }
 
 
