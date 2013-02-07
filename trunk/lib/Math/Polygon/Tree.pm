@@ -28,7 +28,7 @@ use Carp;
 
 use base qw{ Exporter };
 
-use List::Util qw{ sum min max };
+use List::Util qw{ reduce sum min max };
 use List::MoreUtils qw{ uniq };
 
 # FIXME: remove and use simple bbox clip?
@@ -64,70 +64,29 @@ or a .poly file
 =cut
 
 sub new {
-    my $class = shift;
-    my $self  = {};
+    my ($class, @contours) = @_;
+    my $self = {};
 
     ##  load and close polys, calc bbox
-    while ( my $chain_ref = shift ) {
-
-        if ( ref $chain_ref ) {
-            croak "Polygon should be a reference to array of points" 
-                unless ref $chain_ref eq 'ARRAY';
-        
-            my @epoint = ();
-            push @epoint, $chain_ref->[0]
-                unless  $chain_ref->[0]->[0] == $chain_ref->[-1]->[0]
-                    &&  $chain_ref->[0]->[1] == $chain_ref->[-1]->[1];
-
-            my $poly = [ @$chain_ref, @epoint ];
-            push @{$self->{poly}}, $poly;
-
-            my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @$poly );
-
-            $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
-            $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
-            $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
-            $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
+    while ( @contours ) {
+        my $contour = shift @contours;
+        if ( !ref $contour ) {
+            unshift @contours, read_poly_file($contour);
+            next;
         }
-        else {
 
-            open my $in, '<', $chain_ref
-                or croak "Couldn't open $chain_ref: $!";
+        croak "Polygon should be a reference to array of points"  if ref $contour ne 'ARRAY';
 
-            my @bound;
-            my $pid;
+        my @points = @$contour;
+        push @points, $points[0]  if !( $points[0] ~~ $points[-1] );
 
-            while ( my $line = readline $in ) {
-                if ( $line =~ /^(-?\d+)/ ) {
-                    $pid = $1;
-                }
-                elsif ( $line =~ /^\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)/ ) {
-                    push @bound, [ $1+0, $2+0 ];
-                }
-                elsif ( $line =~ /^END/  &&  $pid < 0 ) {
-                    @bound = ();
-                }
-                elsif ( $line =~ /^END/  &&  @bound ) {
+        push @{$self->{poly}}, \@points;
 
-                    push @bound, $bound[0] 
-                        unless  $bound[0]->[0] == $bound[-1]->[0]
-                            &&  $bound[0]->[1] == $bound[-1]->[1];
-                    push @{$self->{poly}}, [ @bound ];
-
-                    my ($xmin, $ymin, $xmax, $ymax) = polygon_bbox( @bound );
-
-                    $self->{xmin} = $xmin       if  !(exists $self->{xmin})  ||  $xmin < $self->{xmin};
-                    $self->{xmax} = $xmax       if  !(exists $self->{xmax})  ||  $xmax > $self->{xmax};
-                    $self->{ymin} = $ymin       if  !(exists $self->{ymin})  ||  $ymin < $self->{ymin};
-                    $self->{ymax} = $ymax       if  !(exists $self->{ymax})  ||  $ymax > $self->{ymax};
-
-                    @bound = ();
-                }
-            }
-
-            close $in;
-        }
+        my $bbox = polygon_bbox(\@points);
+        $self->{bbox} = bbox_union($bbox, $self->{bbox});
     }
+
+    @{$self}{qw/ xmin ymin xmax ymax/} = @{$self->{bbox}};
 
     my $nrpoints = sum map { scalar @$_ } @{$self->{poly}};
 
@@ -180,6 +139,56 @@ sub new {
 
     bless ($self, $class);
     return $self;
+}
+
+
+=func read_poly_file
+
+    my @contours = read_poly_file('file.poly')
+
+Reads content of .poly-file
+
+=cut
+
+sub read_poly_file {
+    my ($file) = @_;
+    my @contours;
+
+    open my $in, '<', $file
+        or croak "Couldn't open $file: $!";
+
+    my $pid;
+    my @cur_points;
+    while ( my $line = readline $in ) {
+        # new contour
+        if ( $line =~ /^(-?\d+)/ ) {
+            $pid = $1;
+            next;
+        }
+
+        # point
+        if ( $line =~ /^\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)/ ) {
+            push @cur_points, [ $1+0, $2+0 ];
+            next;
+        }
+
+        # !!! inner contour - skipping
+        if ( $line =~ /^END/  &&  $pid < 0 ) {
+            @cur_points = ();
+            next;
+        }
+
+        # outer contour
+        if ( $line =~ /^END/  &&  @cur_points ) {
+#            push @cur_points, $cur_points[0]  if !( $cur_points[0] ~~ $cur_points[-1] );
+            push @contours, [ @cur_points ];
+            @cur_points = ();
+            next;
+        }
+    }
+
+    close $in;
+    return @contours;
 }
 
 
@@ -320,8 +329,8 @@ sub contains_polygon_rough {
     croak "Polygon should be a reference to array of points" 
         unless ref $poly;
 
-    my @bbox = polygon_bbox( @$poly );
-    return $self->contains_bbox_rough( @bbox );
+    my $bbox = polygon_bbox( $poly );
+    return $self->contains_bbox_rough( @$bbox );
 }
 
 
@@ -344,20 +353,43 @@ sub bbox {
 
 =func polygon_bbox
 
-Function that returns polygon's bbox.
+    my $bbox = polygon_bbox( [[1,1], [1,2], [2,2], ... ] );
+    my ($xmin, $ymin, $xmax, $ymax) = @$bbox;
 
-    my ( $xmin, $ymin, $xmax, $ymax ) = polygon_bbox( [1,1], [1,2], [2,2], ... );
+Returns polygon's bounding box.
 
 =cut
 
-sub polygon_bbox (@) {
+sub polygon_bbox {
+    my ($contour) = @_;
 
-    return (
-        ( min map { $_->[0] } @_ ),
-        ( min map { $_->[1] } @_ ),
-        ( max map { $_->[0] } @_ ),
-        ( max map { $_->[1] } @_ ),
+    no warnings 'once';
+    return bbox_union(@$contour) if @$contour <= 2;
+    return reduce { bbox_union($a, $b) } @$contour;
+}
+
+
+=func bbox_union
+
+    my $united_bbox = bbox_union($bbox1, $bbox2);
+
+Returns united bbox for two bboxes/points.
+
+=cut
+
+sub bbox_union {
+    my ($bbox1, $bbox2) = @_;
+
+    return [ @$bbox1, @$bbox1 ]  if !$bbox2;
+
+    my @bbox = (
+        min( $bbox1->[0], $bbox2->[0] ),
+        min( $bbox1->[1], $bbox2->[1] ),
+        max( $bbox1->[2] // $bbox1->[0], $bbox2->[2] // $bbox2->[0] ),
+        max( $bbox1->[3] // $bbox1->[1], $bbox2->[3] // $bbox2->[1] ),
     );
+
+    return \@bbox;
 }
 
 
