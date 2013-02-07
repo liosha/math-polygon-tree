@@ -29,7 +29,8 @@ use Carp;
 use base qw{ Exporter };
 
 use List::Util qw{ reduce sum min max };
-use List::MoreUtils qw{ uniq };
+use List::MoreUtils qw{ all uniq };
+use POSIX qw/ ceil /;
 
 # FIXME: remove and use simple bbox clip?
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
@@ -44,7 +45,8 @@ our @EXPORT_OK = qw{
 
 
 
-my $MAX_LEAF_POINTS = 16;       # minimum 6
+our $MAX_LEAF_POINTS = 16;
+our $SLICE_COEF = 2;
 
 
 =method new
@@ -65,7 +67,7 @@ or a .poly file
 
 sub new {
     my ($class, @contours) = @_;
-    my $self = {};
+    my $self = bless {}, $class;
 
     ##  load and close polys, calc bbox
     while ( @contours ) {
@@ -86,10 +88,11 @@ sub new {
         $self->{bbox} = bbox_union($bbox, $self->{bbox});
     }
 
-    @{$self}{qw/ xmin ymin xmax ymax/} = @{$self->{bbox}};
+    croak "No contours"  if !$self->{poly};
 
     my $nrpoints = sum map { scalar @$_ } @{$self->{poly}};
 
+=del
     ##  full square?
     if ( $nrpoints == 5 ) {
         my $poly = $self->{poly}->[0];
@@ -100,9 +103,64 @@ sub new {
             $self->{full} = 1;
         }
     }
+=cut
+    @{$self}{qw/ xmin ymin xmax ymax/} = @{$self->{bbox}};
 
-    ##  branch if big poly
-    if ( $nrpoints > $MAX_LEAF_POINTS ) {
+    # no need to slice
+    return $self  if $nrpoints <= $MAX_LEAF_POINTS;
+
+
+    # calc number of pieces
+    my ($xmin, $ymin, $xmax, $ymax) = @{$self->{bbox}};
+    my $xy_ratio = ($xmax-$xmin) / ($ymax-$ymin);
+    my $nparts = $SLICE_COEF * log( exp(1) * ($nrpoints/$MAX_LEAF_POINTS) );
+
+    my $x_parts = $self->{x_parts} = ceil( sqrt($nparts * $xy_ratio) );
+    my $y_parts = $self->{y_parts} = ceil( sqrt($nparts / $xy_ratio) );
+    my $x_size  = $self->{x_size}  = ($xmax-$xmin) / $x_parts;
+    my $y_size  = $self->{y_size}  = ($ymax-$ymin) / $y_parts;
+
+    # slice
+    my $subparts = $self->{subparts} = [];
+    
+    my $gpc_poly = new_gpc();
+    $gpc_poly->add_polygon( $_, 0 )  for @{$self->{poly}};
+    
+    for my $j ( 0 .. $y_parts-1 ) {
+        for my $i ( 0 .. $x_parts ) {
+
+            my $x0 = $xmin + ($i-0.0001)*$x_size;
+            my $y0 = $ymin + ($j-0.0001)*$y_size;
+            my $x1 = $xmin + ($i+1.0001)*$x_size;
+            my $y1 = $ymin + ($j+1.0001)*$y_size;
+
+            my $gpc_slice = new_gpc();
+            $gpc_slice->add_polygon([ [$x0,$y0],  [$x0,$y1], [$x1,$y1], [$x1,$y0], [$x0,$y0] ], 0);
+
+            my @slice_parts = $gpc_poly->clip_to($gpc_slice, 'INTERSECT')->get_polygons();
+
+            # empty part
+            if ( !@slice_parts ) {
+                $subparts->[$i]->[$j] = 0;
+                next;
+            }
+
+            # filled part
+            if ( @slice_parts == 1 && @{$slice_parts[0]} == 4
+                && all { $_->[0] ~~ [$x0,$x1] && $_->[1] ~~ [$y0,$y1] } @{$slice_parts[0]}
+            ) {
+                $subparts->[$i]->[$j] = 1;
+                next;
+            }
+
+            # complex subpart
+            $subparts->[$i]->[$j] = Math::Polygon::Tree->new(@slice_parts);
+        }
+    }
+
+#    return $self;
+
+    # old code, to delete
         # 0 - horisontal split, 1 - vertical
         $self->{hv}  =  my $hv  =  ($self->{xmax}-$self->{xmin}) < ($self->{ymax}-$self->{ymin});
         $self->{avg} =  my $avg =  $hv  ?  ($self->{ymax}+$self->{ymin})/2  :  ($self->{xmax}+$self->{xmin})/2;
@@ -135,9 +193,7 @@ sub new {
         $self->{part2} = Math::Polygon::Tree->new( $part2_gpc->get_polygons() );
 
         delete $self->{poly};
-    }
 
-    bless ($self, $class);
     return $self;
 }
 
@@ -380,7 +436,7 @@ Returns united bbox for two bboxes/points.
 sub bbox_union {
     my ($bbox1, $bbox2) = @_;
 
-    return [ @$bbox1, @$bbox1 ]  if !$bbox2;
+    $bbox2 //= $bbox1;
 
     my @bbox = (
         min( $bbox1->[0], $bbox2->[0] ),
