@@ -1,5 +1,9 @@
 Revision history for Math-Polygon-Tree
 
+0.06   2013-xx-xx
+        * rewrite tree building
+        * removed polygon_centroid func (use one from Math::Polygon)
+
 0.05   2013-01-29
         * 'contains' returns -1 if point lays on polygon boundary (very dirty!)
 

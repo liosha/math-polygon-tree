@@ -38,7 +38,6 @@ use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 
 our @EXPORT_OK = qw{
     polygon_bbox
-    polygon_centroid
     polygon_contains_point
 };
 
@@ -360,41 +359,6 @@ sub polygon_bbox (@) {
     );
 }
 
-
-=func polygon_centroid
-
-Function that returns polygon's weightened center.
-
-    my ( $x, $y ) = polygon_centroid( [1,1], [1,2], [2,2], ... );
-
-=cut
-
-sub polygon_centroid {
-
-    my $slat = 0;
-    my $slon = 0;
-    my $ssq  = 0;
-
-    for my $i ( 1 .. $#_-1 ) {
-        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
-        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
-
-        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] )
-                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
-
-        $slat += $tlat * $tsq;
-        $slon += $tlon * $tsq;
-        $ssq  += $tsq;
-    }
-
-    if ( $ssq == 0 ) {
-        return (
-            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
-            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
-    }
-
-    return ( $slon/$ssq , $slat/$ssq );
-}
 
 
 =func polygon_contains_point
