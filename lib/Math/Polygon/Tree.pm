@@ -6,7 +6,7 @@ package Math::Polygon::Tree;
 
 =head1 DESCRIPTION
 
-Math::Polygon::Tree creates a B-tree of polygon parts for fast check if object is inside this polygon.
+Math::Polygon::Tree creates a tree of polygon parts for fast check if object is inside this polygon.
 This method is effective if polygon has hundreds or more segments.
 
 =head1 SYNOPSIS
@@ -51,7 +51,8 @@ our $SLICE_COEF = 2;
 
 =method new
 
-Takes [at least one] contour and creates a tree structure. All polygons are outer, inners in not implemented.
+Takes [at least one] contour and creates a tree structure.
+All polygons are outer, inners in not implemented.
 
 Contour is an arrayref of points:
 
@@ -61,7 +62,8 @@ Contour is an arrayref of points:
 
 or a .poly file
 
-    my $bound = Math::Polygon::Tree->new( 'boundary.poly' );
+    my $bound1 = Math::Polygon::Tree->new( \*STDIN );
+    my $bound2 = Math::Polygon::Tree->new( 'boundary.poly' );
 
 =cut
 
@@ -242,28 +244,28 @@ sub contains {
 
 =method contains_points
 
-Checks if points are inside bound polygon.
+    # list of points
+    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ... }
 
-Returns 1 if all points are inside polygon, 0 if all outside, or B<undef>.
+    # arrayref of points
+    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ... }
 
-    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ...
+Checks if all points are inside or outside polygon.
+
+Returns 1 if all points are inside polygon, 0 if all outside, or B<undef> otherwise.
 
 =cut
 
 sub contains_points {
-    my $self  = shift;
-    my $result = undef;
-    
-    while ( my $point = shift ) {
-        next unless ref $point;
+    my ($self, @points) = @_;
 
-        my $isin = abs $self->contains( $point );
-        if ( defined $result ) {
-            return undef  unless  $isin == $result;
-        }
-        else {
-            $result = $isin;
-        }
+    my $iter_list = @points==1 && ref $points[0]->[0]  ? $points[0]  : \@points;
+
+    my $result;
+    for my $point ( @$iter_list ) {
+        my $point_result = 0 + !!$self->contains($point);
+        return undef  if defined $result && $point_result != $result;
+        $result = $point_result;
     }
 
     return $result;
