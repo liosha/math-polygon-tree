@@ -2,6 +2,7 @@ Revision history for Math-Polygon-Tree
 
 0.06   2013-02-08
         * reimplemented tree (new structure)
+        * refactored rudiment code
         * some tests
         ! service functions are incompatible with older versions (return arrayrefs instead of lists)
 
