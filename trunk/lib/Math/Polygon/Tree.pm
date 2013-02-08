@@ -29,7 +29,7 @@ use Carp;
 use base qw{ Exporter };
 
 use List::Util qw{ reduce first sum min max };
-use List::MoreUtils qw{ all uniq };
+use List::MoreUtils qw{ all };
 use POSIX qw/ floor ceil /;
 
 # FIXME: remove and use simple bbox clip?
@@ -139,7 +139,8 @@ sub new {
             }
 
             # filled part
-            if ( @slice_parts == 1 && @{$slice_parts[0]} == 4
+            if (
+                @slice_parts == 1 && @{$slice_parts[0]} == 4
                 && all { $_->[0] ~~ [$x0,$x1] && $_->[1] ~~ [$y0,$y1] } @{$slice_parts[0]}
             ) {
                 $subparts->[$i]->[$j] = 1;
@@ -157,9 +158,10 @@ sub new {
 
 =func read_poly_file
 
-    my @contours = read_poly_file( \*STDIN )
+    my @contours = read_poly_file( \*STDIN );
+    my @contours = read_poly_file( 'bound.poly' )
 
-Reads content of .poly-file
+Reads content of .poly-file. See http://wiki.openstreetmap.org/wiki/.poly
 
 =cut
 
@@ -176,8 +178,8 @@ sub read_poly_file {
     my @cur_points;
     while ( my $line = readline $fh ) {
         # new contour
-        if ( $line =~ /^(-?\d+)/ ) {
-            $pid = $1;
+        if ( $line =~ /^([\-\!]?) (\d+)/x ) {
+            $pid = $1 ? -$2 : $2;
             next;
         }
 
@@ -208,7 +210,8 @@ sub read_poly_file {
 
 =method contains
 
-    if ( $bound->contains( [1,1] ) )  { ... }
+    my $is_inside = $bound->contains( [1,1] );
+    if ( $is_inside ) { ... }
 
 Checks if point is inside bound polygon.
 
@@ -274,48 +277,44 @@ sub contains_points {
 
 =method contains_bbox_rough
 
-Checks if box is inside bound polygon.
+Rough check if box is inside bound polygon.
 
 Returns 1 if box is inside polygon, 0 if box is outside polygon or B<undef> if it 'doubts'. 
 
-    my ($xmin, $ymin, $xmax, $ymax) = ( 1, 1, 2, 2 );
-    if ( $bound->contains_bbox_rough( $xmin, $ymin, $xmax, $ymax ) )  { ... }
+    my $bbox = [ 1, 1, 2, 2 ];
+    if ( $bound->contains_bbox_rough( $bbox ) )  { ... }
 
 =cut
 
 sub contains_bbox_rough {
-    my $self  = shift;
-    croak "Box should be 4 values xmin, ymin, xmax, ymax"
-        unless @_ == 4;
+    my ($self, @bbox)  = @_;
+    my $bbox = ref $bbox[0] ? $bbox[0] : \@bbox;
 
-    my ($xmin, $ymin, $xmax, $ymax) = @_;
+    croak "Box should be 4 values array: xmin, ymin, xmax, ymax" if @$bbox != 4;
 
-    return 0
-        if   $xmax < $self->{xmin}  ||  $xmin > $self->{xmax}
-         ||  $ymax < $self->{ymin}  ||  $ymin > $self->{ymax};
+    my ($x0, $y0, $x1, $y1) = @$bbox;
+    my ($xmin, $ymin, $xmax, $ymax) = @{$self->{bbox}};
 
-    if (  $xmin > $self->{xmin}  &&  $xmax < $self->{xmax}
-      &&  $ymin > $self->{ymin}  &&  $ymax < $self->{ymax} ) {
+    # completely outside bbox
+    return 0       if    $x1 < $xmin  ||  $x0 > $xmax  ||  $y0 < $ymin  ||  $y1 > $ymax;
 
-        return $self->{full}    if  exists $self->{full};
+    # partly inside
+    return undef   if !( $x0 > $xmin  &&  $x1 < $xmax  &&  $y0 > $ymin  &&  $y1 < $ymax );
 
-        if ( exists $self->{hv} ) {
-            if ( $self->{hv} ) {
-                return $self->{part1}->contains_bbox_rough( @_ )
-                    if  $ymax < $self->{avg}; 
-                return $self->{part2}->contains_bbox_rough( @_ )
-                    if  $ymin > $self->{avg}; 
-            }
-            else {
-                return $self->{part1}->contains_bbox_rough( @_ )
-                    if  $xmax < $self->{avg}; 
-                return $self->{part2}->contains_bbox_rough( @_ )
-                    if  $xmin > $self->{avg}; 
-            }
-        }
-    }
+    return undef   if !$self->{subparts};
 
-    return undef;     
+    # lays in defferent subparts 
+    my $i0 = floor( ($x0-$xmin) / $self->{x_size} );
+    my $i1 = floor( ($x1-$xmin) / $self->{x_size} );
+    return undef if $i0 != $i1;
+ 
+    my $j0 = floor( ($y0-$ymin) / $self->{y_size} );
+    my $j1 = floor( ($y1-$ymin) / $self->{y_size} );
+    return undef if $j0 != $j1;
+
+    my $subpart = $self->{subparts}->{$i0}->{$j0};
+    return $subpart  if !ref $subpart;
+    return $subpart->contains_bbox_rough($bbox);
 }
 
 
@@ -330,31 +329,28 @@ Returns 1 if inside, 0 if outside or B<undef> if 'doubts'.
 =cut
 
 sub contains_polygon_rough {
-    my $self = shift;
-    my $poly = shift; 
+    my ($self, $poly) = @_; 
+    croak "Polygon should be a reference to array of points" if ref $poly ne 'ARRAY';
 
-    croak "Polygon should be a reference to array of points" 
-        unless ref $poly;
-
-    my $bbox = polygon_bbox( $poly );
-    return $self->contains_bbox_rough( @$bbox );
+    return $self->contains_bbox_rough( polygon_bbox($poly) );
 }
 
 
 
-=method bbox
+=del method bbox
 
 Returns polygon's bounding box. 
 
     my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
 
-=cut
+
 
 sub bbox {
     my $self  = shift;
     return ( $self->{xmin}, $self->{ymin}, $self->{xmax}, $self->{ymax} );
 }
 
+=cut
 
 
 
@@ -405,6 +401,8 @@ sub bbox_union {
 Function that returns polygon's weightened center.
 
     my ( $x, $y ) = polygon_centroid( [1,1], [1,2], [2,2], ... );
+
+Math::Polygon 1.02+ has the same function, but it is very inaccurate.
 
 =cut
 
