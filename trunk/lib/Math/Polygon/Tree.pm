@@ -336,21 +336,18 @@ sub contains_polygon_rough {
 }
 
 
+=method bbox
 
-=del method bbox
+    my $bbox = $bound->bbox();
+    my ($xmin, $ymin, $xmax, $ymax) = @$bbox;
 
-Returns polygon's bounding box. 
-
-    my ( $xmin, $ymin, $xmax, $ymax ) = $bound->bbox();
-
-
-
-sub bbox {
-    my $self  = shift;
-    return ( $self->{xmin}, $self->{ymin}, $self->{xmax}, $self->{ymax} );
-}
+Returns polygon's bounding box.
 
 =cut
+
+sub bbox {
+    return shift()->{bbox};
+}
 
 
 
@@ -366,7 +363,6 @@ Returns polygon's bounding box.
 sub polygon_bbox {
     my ($contour) = @_;
 
-    no warnings 'once';
     return bbox_union(@$contour) if @$contour <= 2;
     return reduce { bbox_union($a, $b) } @$contour;
 }
@@ -398,39 +394,45 @@ sub bbox_union {
 
 =func polygon_centroid
 
-Function that returns polygon's weightened center.
+    my $center_point = polygon_centroid( [ [1,1], [1,2], [2,2], ... ] );
 
-    my ( $x, $y ) = polygon_centroid( [1,1], [1,2], [2,2], ... );
+Returns polygon's weightened center.
 
 Math::Polygon 1.02+ has the same function, but it is very inaccurate.
 
 =cut
 
 sub polygon_centroid {
+    my (@poly) = @_;
+    my $contour = ref $poly[0] ? $poly[0] : \@poly;
 
-    my $slat = 0;
-    my $slon = 0;
-    my $ssq  = 0;
+    my $sx = 0;
+    my $sy = 0;
+    my $sq = 0;
 
-    for my $i ( 1 .. $#_-1 ) {
-        my $tlon = ( $_[0]->[0] + $_[$i]->[0] + $_[$i+1]->[0] ) / 3;
-        my $tlat = ( $_[0]->[1] + $_[$i]->[1] + $_[$i+1]->[1] ) / 3;
+    my $p0 = $contour->[0];
+    for my $i ( 1 .. $#$contour-1 ) {
+        my $p  = $contour->[$i];
+        my $p1 = $contour->[$i+1];
+        
+        my $tsq = ( ( $p ->[0] - $p0->[0] ) * ( $p1->[1] - $p0->[1] )
+                  - ( $p1->[0] - $p0->[0] ) * ( $p ->[1] - $p0->[1] ) );
+        next if $tsq == 0;
+        
+        my $tx = ( $p0->[0] + $p->[0] + $p1->[0] ) / 3;
+        my $ty = ( $p0->[1] + $p->[1] + $p1->[1] ) / 3;
 
-        my $tsq = ( ( $_[$i]  ->[0] - $_[0]->[0] ) * ( $_[$i+1]->[1] - $_[0]->[1] )
-                  - ( $_[$i+1]->[0] - $_[0]->[0] ) * ( $_[$i]  ->[1] - $_[0]->[1] ) );
-
-        $slat += $tlat * $tsq;
-        $slon += $tlon * $tsq;
-        $ssq  += $tsq;
+        $sx += $tx * $tsq;
+        $sy += $ty * $tsq;
+        $sq += $tsq;
     }
 
-    if ( $ssq == 0 ) {
-        return (
-            ((min map { $_->[0] } @_) + (max map { $_->[0] } @_)) / 2,
-            ((min map { $_->[1] } @_) + (max map { $_->[1] } @_)) / 2 );
+    if ( $sq == 0 ) {
+        my $bbox = polygon_bbox($contour);
+        return [ ($bbox->[0]+$bbox->[2])/2, ($bbox->[1]+$bbox->[3])/2 ];
     }
 
-    return ( $slon/$ssq , $slat/$ssq );
+    return [$sx/$sq, $sy/$sq];
 }
 
 
