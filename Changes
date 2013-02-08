@@ -1,6 +1,6 @@
 Revision history for Math-Polygon-Tree
 
-0.06   2013-02-08
+0.061  2013-02-08
         * reimplemented tree (new structure)
         * refactored rudiment code
         * some tests
