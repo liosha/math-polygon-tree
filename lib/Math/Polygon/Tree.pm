@@ -43,6 +43,7 @@ our @EXPORT_OK = qw{
     polygon_contains_point
 };
 
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 
 # tree options
