@@ -315,7 +315,7 @@ sub contains_bbox_rough {
     my $j1 = floor( ($y1-$ymin) / $self->{y_size} );
     return undef if $j0 != $j1;
 
-    my $subpart = $self->{subparts}->{$i0}->{$j0};
+    my $subpart = $self->{subparts}->[$i0]->[$j0];
     return $subpart  if !ref $subpart;
     return $subpart->contains_bbox_rough($bbox);
 }
