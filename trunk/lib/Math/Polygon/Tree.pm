@@ -240,8 +240,8 @@ sub contains {
     }
 
     # branch
-    my $i = floor( ($px-$xmin) / $self->{x_size} );
-    my $j = floor( ($py-$ymin) / $self->{y_size} );
+    my $i = min( floor( ($px-$xmin) / $self->{x_size} ), $self->{x_parts}-1 );
+    my $j = min( floor( ($py-$ymin) / $self->{y_size} ), $self->{y_parts}-1 );
 
     my $subpart = $self->{subparts}->[$i]->[$j];
     return $subpart  if !ref $subpart;
@@ -308,12 +308,12 @@ sub contains_bbox_rough {
     return undef   if !$self->{subparts};
 
     # lays in defferent subparts 
-    my $i0 = floor( ($x0-$xmin) / $self->{x_size} );
-    my $i1 = floor( ($x1-$xmin) / $self->{x_size} );
+    my $i0 = min( floor( ($x0-$xmin) / $self->{x_size} ), $self->{x_parts}-1 );
+    my $i1 = min( floor( ($x1-$xmin) / $self->{x_size} ), $self->{x_parts}-1 );
     return undef if $i0 != $i1;
  
-    my $j0 = floor( ($y0-$ymin) / $self->{y_size} );
-    my $j1 = floor( ($y1-$ymin) / $self->{y_size} );
+    my $j0 = min( floor( ($y0-$ymin) / $self->{y_size} ), $self->{y_parts}-1 );
+    my $j1 = min( floor( ($y1-$ymin) / $self->{y_size} ), $self->{y_parts}-1 );
     return undef if $j0 != $j1;
 
     my $subpart = $self->{subparts}->[$i0]->[$j0];
