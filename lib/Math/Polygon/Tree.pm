@@ -248,7 +248,7 @@ sub contains {
     if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ... }
 
     # arrayref of points
-    if ( $bound->contains_points( [1,1], [2,2] ... ) )  { ... }
+    if ( $bound->contains_points( [[1,1], [2,2] ...] ) )  { ... }
 
 Checks if all points are inside or outside polygon.
 
