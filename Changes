@@ -1,8 +1,9 @@
 Revision history for Math-Polygon-Tree
 
 0.06   2013-xx-xx
-        * rewrite tree building
-        ! service functions is incompatible with older versions
+        * reimplemented tree building (new structure)
+        * some tests
+        ! service functions are incompatible with older versions (return arrayrefs instead of lists)
 
 0.05   2013-01-29
         * 'contains' returns -1 if point lays on polygon boundary (very dirty!)
