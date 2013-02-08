@@ -32,7 +32,7 @@ use List::Util qw{ reduce first sum min max };
 use List::MoreUtils qw{ all };
 use POSIX qw/ floor ceil /;
 
-# FIXME: remove and use simple bbox clip?
+# todo: remove gpc and use simple bbox clip
 use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
 
 
@@ -45,14 +45,18 @@ our @EXPORT_OK = qw{
 
 
 
+# tree options
+
 our $MAX_LEAF_POINTS = 16;
-our $SLICE_COEF = 2;
+our $SLICE_FIELD = 0.0001;
+our $SLICE_NUM_COEF = 2;
+our $SLICE_NUM_SPEED_COEF = 1;
 
 
 =method new
 
-Takes [at least one] contour and creates a tree structure.
-All polygons are outer, inners in not implemented.
+Takes contours and creates a tree structure.
+All polygons are outers, inners are not implemented.
 
 Contour is an arrayref of points:
 
@@ -94,7 +98,6 @@ sub new {
 
     my $nrpoints = sum map { scalar @$_ } @contours;
 
-
     # small polygon - no need to slice
     if ( $nrpoints <= $MAX_LEAF_POINTS ) {
         $self->{poly} = \@contours;
@@ -105,7 +108,7 @@ sub new {
     # calc number of pieces (need to tune!)
     my ($xmin, $ymin, $xmax, $ymax) = @{$self->{bbox}};
     my $xy_ratio = ($xmax-$xmin) / ($ymax-$ymin);
-    my $nparts = $SLICE_COEF * log( exp(1) * ($nrpoints/$MAX_LEAF_POINTS) );
+    my $nparts = $SLICE_NUM_COEF * log( exp(1) * ($nrpoints/$MAX_LEAF_POINTS)**$SLICE_NUM_SPEED_COEF );
 
     my $x_parts = $self->{x_parts} = ceil( sqrt($nparts * $xy_ratio) );
     my $y_parts = $self->{y_parts} = ceil( sqrt($nparts / $xy_ratio) );
@@ -122,10 +125,10 @@ sub new {
     for my $j ( 0 .. $y_parts-1 ) {
         for my $i ( 0 .. $x_parts ) {
 
-            my $x0 = $xmin + ($i-0.0001)*$x_size;
-            my $y0 = $ymin + ($j-0.0001)*$y_size;
-            my $x1 = $xmin + ($i+1.0001)*$x_size;
-            my $y1 = $ymin + ($j+1.0001)*$y_size;
+            my $x0 = $xmin + ($i  -$SLICE_FIELD)*$x_size;
+            my $y0 = $ymin + ($j  -$SLICE_FIELD)*$y_size;
+            my $x1 = $xmin + ($i+1+$SLICE_FIELD)*$x_size;
+            my $y1 = $ymin + ($j+1+$SLICE_FIELD)*$y_size;
 
             my $gpc_slice = new_gpc();
             $gpc_slice->add_polygon([ [$x0,$y0],  [$x0,$y1], [$x1,$y1], [$x1,$y0], [$x0,$y0] ], 0);
