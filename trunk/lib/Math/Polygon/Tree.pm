@@ -406,6 +406,8 @@ sub polygon_centroid {
     my (@poly) = @_;
     my $contour = ref $poly[0] ? $poly[0] : \@poly;
 
+    return $contour->[0]  if @$contour < 2;
+
     my $sx = 0;
     my $sy = 0;
     my $sq = 0;

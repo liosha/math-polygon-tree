@@ -10,9 +10,11 @@ use Test::More;
 use Math::Polygon::Tree qw/ polygon_centroid /;
 
 our @TESTS = (
+    [ [[1,1]],                   [1,1], 'single point' ],
     [ [[0,0],[2,4]],             [1,2], 'single segment' ],
     [ [[0,0],[3,0],[0,3]],       [1,1], 'triangle' ],
     [ [[0,0],[4,0],[4,4],[0,4]], [2,2], 'square' ],
+    [ [[0,0],[3,0],[3.0],[0,3]], [1,1], 'duplicated point' ],
 );
 
 
