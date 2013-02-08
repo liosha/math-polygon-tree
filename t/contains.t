@@ -21,6 +21,13 @@ our @TESTS = (
         [ [8,8], 0, 'far outside' ],
     ],
     [
+        diamond => [[0,2],[2,4],[4,2],[2,0]],
+        [ [0,2], -1, 'first vertex' ],
+        [ [2,4], -1, 'upper vertex' ],
+        [ [4,2], -1, 'right vertex' ],
+        [ [2,0], -1, 'lower vertex' ],
+    ],
+    [
         square => [[0,0],[2,0],[2,2],[0,2]],
         [ [2,2], -1, 'vertex point' ],
         [ [1,2], -1, 'edge point' ],
@@ -35,6 +42,7 @@ our @TESTS = (
         [ [33.7432200,55.2087300], 0, 'far outside but in bbox' ],
         [ [34.4161186,54.5149376], 0, 'outside near border' ],
         [ [34.4141363,54.5091271], 1, 'inside near border' ],
+        [ [35.3430604,55.2730587], -1,'local upper vertex' ],
         [ [8,8], 0, 'very far outside' ],
 #        [ [], 1, '' ],
     ],
