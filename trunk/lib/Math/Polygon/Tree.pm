@@ -231,7 +231,7 @@ sub contains {
 
     # leaf
     if ( exists $self->{poly} ) {
-        my $result = first {$_} map {polygon_contains_point($point, @$_)} @{$self->{poly}};
+        my $result = first {$_} map {polygon_contains_point($point, $_)} @{$self->{poly}};
         return $result // 0;
     }
 
@@ -404,7 +404,7 @@ Math::Polygon 1.02+ has the same function, but it is very inaccurate.
 
 sub polygon_centroid {
     my (@poly) = @_;
-    my $contour = ref $poly[0] ? $poly[0] : \@poly;
+    my $contour = ref $poly[0]->[0] ? $poly[0] : \@poly;
 
     return $contour->[0]  if @$contour < 2;
 
@@ -416,9 +416,9 @@ sub polygon_centroid {
     for my $i ( 1 .. $#$contour-1 ) {
         my $p  = $contour->[$i];
         my $p1 = $contour->[$i+1];
-        
-        my $tsq = ( ( $p ->[0] - $p0->[0] ) * ( $p1->[1] - $p0->[1] )
-                  - ( $p1->[0] - $p0->[0] ) * ( $p ->[1] - $p0->[1] ) );
+
+        my $tsq = ( ( $p->[0]  - $p0->[0] ) * ( $p1->[1] - $p0->[1] )
+                  - ( $p1->[0] - $p0->[0] ) * ( $p->[1]  - $p0->[1] ) );
         next if $tsq == 0;
         
         my $tx = ( $p0->[0] + $p->[0] + $p1->[0] ) / 3;
@@ -440,25 +440,27 @@ sub polygon_centroid {
 
 =func polygon_contains_point
 
+    my $is_inside = polygon_contains_point($point, $polygon);
+
 Function that tests if polygon contains point (modified one from Math::Polygon::Calc).
 
 Returns -1 if point lays on polygon's boundary
 
 =cut
 
-sub polygon_contains_point ($@) {
+sub polygon_contains_point {
+    my ($point, @poly) = @_;
+    my $contour = ref $poly[0]->[0] ? $poly[0] : \@poly;
 
-    my $point = shift;
-
-    my ( $x,  $y)  =  @$point;
-    my ($px, $py)  =  @{ (shift) };
+    my ($x, $y) = @$point;
+    my ($px, $py) = @{ $contour->[0] };
     my ($nx, $ny);
 
     my $inside = 0;
 
-    while( @_ ) {
-        ($nx, $ny) =  @{ (shift) };
-        
+    for my $i ( 1 .. scalar @$contour ) { 
+        ($nx, $ny) =  @{ $contour->[ $i % scalar @$contour ] };
+
         return -1
             if  $y == $py  &&  $py == $ny
                 && ( $x >= $px  ||  $x >= $nx )
