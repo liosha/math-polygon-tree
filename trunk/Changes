@@ -1,5 +1,11 @@
 Revision history for Math-Polygon-Tree
 
+0.065 2013-02-12
+        * more options for 'rough' checks
+
+0.062  2013-02-11
+        * float comparsion fix
+
 0.061  2013-02-08
         * reimplemented tree (new structure)
         * refactored rudiment code
