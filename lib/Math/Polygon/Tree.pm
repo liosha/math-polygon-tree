@@ -29,7 +29,7 @@ use Carp;
 use base qw{ Exporter };
 
 use List::Util qw{ reduce first sum min max };
-use List::MoreUtils qw{ all any first_index };
+use List::MoreUtils qw{ all any };
 use POSIX qw/ floor ceil /;
 
 # todo: remove gpc and use simple bbox clip
@@ -113,28 +113,45 @@ sub new {
         # find some filled bboxes for rough checks
         if ( $opt{prepare_rough} ) {
             my ($x0, $y0, $x1, $y1) = @{ $self->{bbox} };
-            for my $contour ( @contours ) {
-                my $i00 = first_index { $_->[0] == $x0  &&  $_->[1] == $y0 } @$contour;
-                my $i01 = first_index { $_->[0] == $x0  &&  $_->[1] == $y1 } @$contour;
-                my $i10 = first_index { $_->[0] == $x1  &&  $_->[1] == $y0 } @$contour;
-                my $i11 = first_index { $_->[0] == $x1  &&  $_->[1] == $y1 } @$contour;
+            for my $c ( @contours ) {
+                for my $i ( 0 .. $#$c-1 ) {
+                    my ($h, $j, $k) = ( ($i>0 ? $i-1 : -2), $i+1, ($i<$#$c-1 ? $i+2 : 0) );
 
-                my @near = ( 1, scalar @$contour - 2 );
-                if ( $i00 >= 0 && $i01 >= 0 && abs($i00-$i01) ~~ \@near ) {
-                    my $x = min grep {$_ > $x0} map {$_->[0]} @$contour;
-                    push @{ $self->{filled_bboxes} }, [$x0, $y0, $x, $y1];
-                }
-                if ( $i10 >= 0 && $i11 >= 0 && abs($i10-$i11) ~~ \@near ) {
-                    my $x = max grep {$_ < $x1} map {$_->[0]} @$contour;
-                    push @{ $self->{filled_bboxes} }, [$x, $y0, $x1, $y1];
-                }
-                if ( $i00 >= 0 && $i10 >= 0 && abs($i00-$i10) ~~ \@near ) {
-                    my $y = min grep {$_ > $y0} map {$_->[1]} @$contour;
-                    push @{ $self->{filled_bboxes} }, [$x0, $y0, $x1, $y];
-                }
-                if ( $i01 >= 0 && $i11 >= 0 && abs($i01-$i11) ~~ \@near ) {
-                    my $y = max grep {$_ < $y1} map {$_->[1]} @$contour;
-                    push @{ $self->{filled_bboxes} }, [$x0, $y, $x1, $y1];
+                    if (
+                           $c->[$h]->[1] == $c->[$i]->[1]
+                        && $c->[$k]->[1] == $c->[$j]->[1]
+                        && $c->[$i]->[1] ~~ [$y0, $y1]
+                        && $c->[$j]->[1] ~~ [$y0, $y1]
+                    ) {
+                        # left edge
+                        if ( $c->[$i]->[0] == $x0 && $c->[$j]->[0] == $x0 ) {
+                            my $x = min grep {$_ > $x0} map {$_->[0]} @$c;
+                            push @{ $self->{filled_bboxes} }, [$x0, $y0, $x, $y1];
+                        }
+                        # right edge
+                        if ( $c->[$i]->[0] == $x1 && $c->[$j]->[0] == $x1 ) {
+                            my $x = max grep {$_ < $x1} map {$_->[0]} @$c;
+                            push @{ $self->{filled_bboxes} }, [$x, $y0, $x1, $y1];
+                        }
+                    }
+
+                    if (
+                           $c->[$h]->[0] == $c->[$i]->[0]
+                        && $c->[$k]->[0] == $c->[$j]->[0]
+                        && $c->[$i]->[0] ~~ [$x0, $x1]
+                        && $c->[$j]->[0] ~~ [$x0, $x1]
+                    ) {
+                        # lower edge
+                        if ( $c->[$i]->[1] == $y0 && $c->[$j]->[1] == $y0 ) {
+                            my $y = min grep {$_ > $y0} map {$_->[1]} @$c;
+                            push @{ $self->{filled_bboxes} }, [$x0, $y0, $x1, $y];
+                        }
+                        # upper edge
+                        if ( $c->[$i]->[1] == $y1 && $c->[$j]->[1] == $y1 ) {
+                            my $y = max grep {$_ < $y1} map {$_->[1]} @$c;
+                            push @{ $self->{filled_bboxes} }, [$x0, $y, $x1, $y1];
+                        }
+                    }
                 }
             }
         }
@@ -346,7 +363,7 @@ sub contains_bbox_rough {
     return 0       if    $x1 < $xmin  ||  $x0 > $xmax  ||  $y0 < $ymin  ||  $y1 > $ymax;
 
     # partly inside
-    return undef   if !( $x0 > $xmin  &&  $x1 < $xmax  &&  $y0 > $ymin  &&  $y1 < $ymax );
+    return undef   if !( $x0 >= $xmin  &&  $x1 <= $xmax  &&  $y0 >= $ymin  &&  $y1 <= $ymax );
 
     if ( !$self->{subparts} ) {
         for my $fbbox ( @{ $self->{filled_bboxes} || [] } ) {
@@ -392,7 +409,7 @@ sub contains_polygon_rough {
     my ($self, $poly, %opt) = @_; 
     croak "Polygon should be a reference to array of points" if ref $poly ne 'ARRAY';
 
-    return $self->contains_bbox_rough( polygon_bbox( $poly, (%opt ? \%opt : ()) ) );
+    return $self->contains_bbox_rough( polygon_bbox($poly), (%opt ? \%opt : ()) );
 }
 
 

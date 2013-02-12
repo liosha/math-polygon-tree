@@ -12,10 +12,17 @@ use Math::Polygon::Tree;
 
 our @TESTS = (
     [
+        pp => [[0,0],[4,0],[4,2],[2,3],[0,3]],
+        [ [[[1,1],[2,2]]], 1, 'inside' ],
+        [ [[[1,1],[2,2]]], 1, 'inside and touch boundary' ],
+        [ [[[5,5],[6,6]]], 0, 'outside' ],
+        [ [[[1,1],[3,2.2]]], undef, 'doubt' ],
+        [ [[[1,1],[3,2.2]], inaccurate=>1], 1, 'inaccurate' ],
+    ],
+    [
         poly_file => \*DATA,
-        [ [[35.2284227,54.7442032],[35.2280966,54.7442021],[35.2280953,54.7443255],[35.2284214,54.7443267]],
+        [ [[[35.2284227,54.7442032],[35.2280966,54.7442021],[35.2280953,54.7443255],[35.2284214,54.7443267]]],
             , 1, 'house 1' ],
-#        [ [], 1, '' ],
     ],
 );
 
@@ -26,7 +33,7 @@ for my $item ( @TESTS ) {
 
     for my $test ( @tests ) { 
         my ($in, $expected, $name) = @$test;
-        my $got = $t->contains_polygon_rough($in);
+        my $got = $t->contains_polygon_rough(@$in);
         is( $got, $expected, "$case: $name" );
     }
 }
