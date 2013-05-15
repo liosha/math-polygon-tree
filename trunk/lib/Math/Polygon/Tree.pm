@@ -33,8 +33,22 @@ use List::MoreUtils qw{ all any };
 use POSIX qw/ floor ceil /;
 
 # todo: remove gpc and use simple bbox clip
-use Math::Geometry::Planar::GPC::Polygon qw{ new_gpc };
+our $CLIPPER_CLASS;
+BEGIN {
+    my @clippers = qw/
+        Math::Geometry::Planar::GPC::Polygon
+        Math::Geometry::Planar::GPC::PolygonXS
+    /;
 
+    for my $class ( @clippers ) {
+        eval "require $class"  or next;
+        $CLIPPER_CLASS = $class;
+        last;
+    }
+
+    croak "No clipper class available" if !$CLIPPER_CLASS;
+}
+    
 
 
 our @EXPORT_OK = qw{
@@ -174,7 +188,7 @@ sub new {
     # slice
     my $subparts = $self->{subparts} = [];
     
-    my $gpc_poly = new_gpc();
+    my $gpc_poly = $CLIPPER_CLASS->new_gpc();
     $gpc_poly->add_polygon( $_, 0 )  for @contours;
     
     for my $j ( 0 .. $y_parts-1 ) {
@@ -185,7 +199,7 @@ sub new {
             my $x1 = $xmin + ($i+1+$SLICE_FIELD)*$x_size;
             my $y1 = $ymin + ($j+1+$SLICE_FIELD)*$y_size;
 
-            my $gpc_slice = new_gpc();
+            my $gpc_slice = $CLIPPER_CLASS->new_gpc();
             $gpc_slice->add_polygon([ [$x0,$y0],  [$x0,$y1], [$x1,$y1], [$x1,$y0], [$x0,$y0] ], 0);
 
             my @slice_parts = $gpc_poly->clip_to($gpc_slice, 'INTERSECT')->get_polygons();
@@ -360,7 +374,7 @@ sub contains_bbox_rough {
     my ($xmin, $ymin, $xmax, $ymax) = @{$self->{bbox}};
 
     # completely outside bbox
-    return 0       if    $x1 < $xmin  ||  $x0 > $xmax  ||  $y0 < $ymin  ||  $y1 > $ymax;
+    return 0       if    $x1 < $xmin  ||  $x0 > $xmax  ||  $y1 < $ymin  ||  $y0 > $ymax;
 
     # partly inside
     return undef   if !( $x0 >= $xmin  &&  $x1 <= $xmax  &&  $y0 >= $ymin  &&  $y1 <= $ymax );
