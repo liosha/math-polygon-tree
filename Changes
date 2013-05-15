@@ -1,7 +1,11 @@
 Revision history for Math-Polygon-Tree
 
-0.067 2013-02-12
+0.069 2013-05-15
+        * optionally use Math::Geometry::Planar::GPC::PolygonXS
+
+0.068 2013-02-12
         * more options for 'rough' checks
+        * fixes
 
 0.062  2013-02-11
         * float comparsion fix
