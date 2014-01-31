@@ -1,5 +1,8 @@
 Revision history for Math-Polygon-Tree
 
+0.069.1 2013-05-15
+        * (internal) removed ~~
+
 0.069 2013-05-15
         * optionally use Math::Geometry::Planar::GPC::PolygonXS
 
