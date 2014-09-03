@@ -36,8 +36,8 @@ use POSIX qw/ floor ceil /;
 our $CLIPPER_CLASS;
 BEGIN {
     my @clippers = qw/
-        Math::Geometry::Planar::GPC::Polygon
         Math::Geometry::Planar::GPC::PolygonXS
+        Math::Geometry::Planar::GPC::Polygon
     /;
 
     for my $class ( @clippers ) {

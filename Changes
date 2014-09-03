@@ -1,5 +1,9 @@
 Revision history for Math-Polygon-Tree
 
+0.07    2014-09-03
+        perl 5.18 compatibility
+        * preferable use of Math::Geometry::Planar::GPC::PolygonXS (dependency changed)
+
 0.069.1 2013-05-15
         * (internal) removed ~~
 
