@@ -300,7 +300,11 @@ sub contains {
     # check bbox
     my ($px, $py) = @$point;
     my ($xmin, $ymin, $xmax, $ymax) = @{ $self->{bbox} };
-    return 0  if $px < $xmin  ||  $px > $xmax  ||  $py < $ymin  ||  $py > $ymax;
+    return 0
+        if $px < $xmin-$POLYGON_BORDER_WIDTH
+        || $px > $xmax+$POLYGON_BORDER_WIDTH
+        || $py < $ymin-$POLYGON_BORDER_WIDTH
+        || $py > $ymax+$POLYGON_BORDER_WIDTH;
 
     # leaf
     if ( exists $self->{poly} ) {
@@ -551,6 +555,8 @@ sub polygon_contains_point {
 
     for my $i ( 1 .. scalar @$contour ) { 
         ($nx, $ny) =  @{ $contour->[ $i % scalar @$contour ] };
+
+        return -1  if abs($y-$py) < $POLYGON_BORDER_WIDTH && abs($x-$px) < $POLYGON_BORDER_WIDTH;
 
         return -1
             if  abs($y-$py) < $POLYGON_BORDER_WIDTH  &&  abs($py-$ny) < $POLYGON_BORDER_WIDTH
